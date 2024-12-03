@@ -1,0 +1,49 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class POV : MonoBehaviour//may have to change to (PointOfView/Gargoyle/Observer) if it has that script class error
+{
+
+    public Transform player;
+    public Game_Ending game_Ending;//Something may be fishy here
+    bool m_IsPlayerInRange;
+
+    void OnTriggerEnter(Collider other)
+    {
+        if (other.transform == player)
+        {
+            m_IsPlayerInRange = true;
+
+        }
+    }
+    void OnTriggerExit(Collider other)
+    {
+        if (other.transform == player)
+        {
+
+            m_IsPlayerInRange = false;
+
+        }
+    }
+            void Update ()
+        {
+            if (m_IsPlayerInRange)
+            {
+
+                Vector3 direction = player.position - transform.position + Vector3.up;
+                Ray ray = new Ray(transform.position, direction);
+                RaycastHit raycastHit;
+
+            
+            if (Physics.Raycast(ray, out raycastHit))
+            {
+
+  if(raycastHit.collider.transform == player)
+                {
+                    game_Ending.CaughtPlayer();
+                }
+            }
+        }
+    }
+}
