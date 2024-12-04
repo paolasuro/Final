@@ -1,0 +1,85 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class PlayerMovement : MonoBehaviour
+{
+    public float turnSpeed = 10f;
+    public KeyCode unfreezeKey = KeyCode.Space; // Key to unfreeze
+    public int requiredUnfreezePresses = 5; // Button presses needed to unfreeze
+    public float freezeInterval = 10f; // Time between freezes
+
+    private Animator m_Animator;
+    private Rigidbody m_Rigidbody;
+    private Vector3 m_Movement;
+    private Quaternion m_Rotation = Quaternion.identity;
+    private bool isFrozen = false;
+    private int unfreezePressCount = 0;
+    private float freezeTimer;
+
+    void Start()
+    {
+        m_Animator = GetComponent<Animator>();
+        m_Rigidbody = GetComponent<Rigidbody>();
+        freezeTimer = freezeInterval;
+    }
+
+    void Update()
+    {
+        if (!isFrozen)
+        {
+            freezeTimer -= Time.deltaTime;
+            if (freezeTimer <= 0f)
+            {
+                FreezePlayer();
+            }
+        }
+        else
+        {
+            HandleUnfreeze();
+        }
+
+        if (isFrozen) return;
+
+        float horizontal = Input.GetAxis("Horizontal");
+        float vertical = Input.GetAxis("Vertical");
+
+        m_Movement.Set(horizontal, 0f, vertical);
+        m_Movement.Normalize();
+
+        m_Animator.SetBool("IsWalking", m_Movement.sqrMagnitude > 0f);
+
+        Vector3 desiredForward = Vector3.RotateTowards(transform.forward, m_Movement, turnSpeed * Time.deltaTime, 0f);
+        m_Rotation = Quaternion.LookRotation(desiredForward);
+    }
+
+    void FixedUpdate()
+    {
+        if (isFrozen) return;
+
+        m_Rigidbody.MovePosition(m_Rigidbody.position + m_Movement * Time.deltaTime);
+        m_Rigidbody.MoveRotation(m_Rotation);
+    }
+
+    void FreezePlayer()
+    {
+        isFrozen = true;
+        unfreezePressCount = 0;
+        Debug.Log("John Lemon is frozen! Press the unfreeze key!");
+    }
+
+    void HandleUnfreeze()
+    {
+        if (Input.GetKeyDown(unfreezeKey))
+        {
+            unfreezePressCount++;
+            Debug.Log($"Unfreeze progress: {unfreezePressCount}/{requiredUnfreezePresses}");
+            if (unfreezePressCount >= requiredUnfreezePresses)
+            {
+                isFrozen = false;
+                freezeTimer = freezeInterval; // Reset freeze timer
+                Debug.Log("John Lemon is unfrozen!");
+            }
+        }
+    }
+}
