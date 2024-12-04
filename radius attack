@@ -1,0 +1,72 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class PlayerMovement : MonoBehaviour
+{
+    public float turnSpeed = 10f;
+    public float attackRange = 5f; // Radius
+    public ParticleSystem attackEffect; 
+    public LayerMask enemyLayer; // enemies
+    private bool hasUsedAttack = false; // if the ability has been used
+
+    private Animator m_Animator;
+    private Rigidbody m_Rigidbody;
+    private Vector3 m_Movement;
+    private Quaternion m_Rotation = Quaternion.identity;
+
+    void Start()
+    {
+        m_Animator = GetComponent<Animator>();
+        m_Rigidbody = GetComponent<Rigidbody>();
+    }
+
+    void Update()
+    {
+        if (Input.GetKeyDown(KeyCode.Space) && !hasUsedAttack)
+        {
+            UseAttack();
+        }
+
+        float horizontal = Input.GetAxis("Horizontal");
+        float vertical = Input.GetAxis("Vertical");
+
+        m_Movement.Set(horizontal, 0f, vertical);
+        m_Movement.Normalize();
+
+        m_Animator.SetBool("IsWalking", m_Movement.sqrMagnitude > 0f);
+
+        Vector3 desiredForward = Vector3.RotateTowards(transform.forward, m_Movement, turnSpeed * Time.deltaTime, 0f);
+        m_Rotation = Quaternion.LookRotation(desiredForward);
+    }
+
+    void FixedUpdate()
+    {
+        m_Rigidbody.MovePosition(m_Rigidbody.position + m_Movement * Time.deltaTime);
+        m_Rigidbody.MoveRotation(m_Rotation);
+    }
+
+    void UseAttack()
+    {
+        if (attackEffect != null)
+        {
+            attackEffect.Play();
+        }
+
+        Collider[] enemies = Physics.OverlapSphere(transform.position, attackRange, enemyLayer);
+
+        foreach (Collider enemy in enemies)
+        {
+            Destroy(enemy.gameObject);
+        }
+
+        hasUsedAttack = true; 
+        Debug.Log("Attack used! Destroyed " + enemies.Length + " enemies.");
+    }
+
+    void OnDrawGizmosSelected()
+    {
+        Gizmos.color = Color.red;
+        Gizmos.DrawWireSphere(transform.position, attackRange);
+    }
+}
