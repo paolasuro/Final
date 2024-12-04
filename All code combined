@@ -1,0 +1,226 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using TMPro;
+using UnityEngine.AI;
+
+public class GameManager : MonoBehaviour
+{
+    // Player Movement and Freeze
+    public float turnSpeed = 10f;
+    public float freezeCooldown = 10f; // Time between potential freezes
+    public int requiredUnfreezePresses = 3; // Button presses to unfreeze
+    public KeyCode unfreezeKey = KeyCode.Space; // Key to press for unfreezing
+    public float attackRange = 5f; // Radius of the attack
+    public ParticleSystem attackEffect; // Particle effect for the attack
+    public LayerMask enemyLayer; // Layer for enemies
+
+    public Animator playerAnimator;
+    public Rigidbody playerRigidbody;
+    public AudioSource playerAudioSource;
+    public Transform player;
+    public Transform[] waypoints; // Patrol waypoints
+
+    public CanvasGroup exitBackgroundImageCanvasGroup;
+    public CanvasGroup caughtBackgroundImageCanvasGroup;
+    public AudioSource exitAudio;
+    public AudioSource caughtAudio;
+
+    public TextMeshProUGUI timerText;
+
+    private Vector3 playerMovement;
+    private Quaternion playerRotation = Quaternion.identity;
+    private bool isFrozen = false;
+    private int unfreezePressCount = 0;
+    private float freezeTimer; // Timer for the next freeze
+    private bool hasUsedAttack = false;
+
+    private bool isPlayerAtExit = false;
+    private bool isPlayerCaught = false;
+    private bool hasAudioPlayed = false;
+
+    private float elapsedTime = 0f; // Timer tracking
+    private float m_Timer = 0f; // Level-ending timer
+
+    private NavMeshAgent enemyNavMeshAgent;
+    private int currentWaypointIndex = 0;
+
+    void Start()
+    {
+        playerAnimator = GetComponent<Animator>();
+        playerRigidbody = GetComponent<Rigidbody>();
+        playerAudioSource = GetComponent<AudioSource>();
+
+        freezeTimer = Random.Range(5f, freezeCooldown); // Randomize initial freeze time
+
+        // Initialize patrol
+        if (waypoints.Length > 0)
+        {
+            enemyNavMeshAgent = GetComponent<NavMeshAgent>();
+            enemyNavMeshAgent.SetDestination(waypoints[0].position);
+        }
+    }
+
+    void Update()
+    {
+        // Update Timer
+        elapsedTime += Time.deltaTime;
+        int minutes = Mathf.FloorToInt(elapsedTime / 60);
+        int seconds = Mathf.FloorToInt(elapsedTime % 60);
+        timerText.text = string.Format("{0:00}:{1:00}", minutes, seconds);
+
+        // Freeze and Unfreeze Mechanics
+        if (isFrozen)
+        {
+            HandleUnfreeze();
+        }
+        else
+        {
+            freezeTimer -= Time.deltaTime;
+            if (freezeTimer <= 0f)
+            {
+                FreezePlayer();
+            }
+        }
+
+        // Handle Attack Ability
+        if (Input.GetKeyDown(KeyCode.Space) && !hasUsedAttack && !isFrozen)
+        {
+            UseAttack();
+        }
+
+        // Skip movement if frozen
+        if (isFrozen) return;
+
+        // Player Movement
+        float horizontal = Input.GetAxis("Horizontal");
+        float vertical = Input.GetAxis("Vertical");
+
+        playerMovement.Set(horizontal, 0f, vertical);
+        playerMovement.Normalize();
+
+        bool isWalking = playerMovement.sqrMagnitude > 0f;
+        playerAnimator.SetBool("IsWalking", isWalking);
+
+        if (isWalking && !playerAudioSource.isPlaying)
+        {
+            playerAudioSource.Play();
+        }
+        else if (!isWalking)
+        {
+            playerAudioSource.Stop();
+        }
+
+        Vector3 desiredForward = Vector3.RotateTowards(transform.forward, playerMovement, turnSpeed * Time.deltaTime, 0f);
+        playerRotation = Quaternion.LookRotation(desiredForward);
+
+        // Enemy Patrol
+        if (enemyNavMeshAgent != null && enemyNavMeshAgent.remainingDistance < enemyNavMeshAgent.stoppingDistance)
+        {
+            currentWaypointIndex = (currentWaypointIndex + 1) % waypoints.Length;
+            enemyNavMeshAgent.SetDestination(waypoints[currentWaypointIndex].position);
+        }
+
+        // Handle Game End
+        if (isPlayerAtExit)
+        {
+            EndLevel(exitBackgroundImageCanvasGroup, false, exitAudio);
+        }
+        else if (isPlayerCaught)
+        {
+            EndLevel(caughtBackgroundImageCanvasGroup, true, caughtAudio);
+        }
+    }
+
+    void FixedUpdate()
+    {
+        if (isFrozen) return;
+
+        playerRigidbody.MovePosition(playerRigidbody.position + playerMovement * playerAnimator.deltaPosition.magnitude);
+        playerRigidbody.MoveRotation(playerRotation);
+    }
+
+    void FreezePlayer()
+    {
+        isFrozen = true;
+        unfreezePressCount = 0;
+        Debug.Log("Player is frozen! Press the unfreeze key.");
+    }
+
+    void HandleUnfreeze()
+    {
+        if (Input.GetKeyDown(unfreezeKey))
+        {
+            unfreezePressCount++;
+            Debug.Log($"Unfreeze progress: {unfreezePressCount}/{requiredUnfreezePresses}");
+            if (unfreezePressCount >= requiredUnfreezePresses)
+            {
+                isFrozen = false;
+                freezeTimer = Random.Range(5f, freezeCooldown);
+                Debug.Log("Player is unfrozen!");
+            }
+        }
+    }
+
+    void UseAttack()
+    {
+        if (attackEffect != null)
+        {
+            attackEffect.Play();
+        }
+
+        Collider[] enemies = Physics.OverlapSphere(transform.position, attackRange, enemyLayer);
+
+        foreach (Collider enemy in enemies)
+        {
+            Destroy(enemy.gameObject);
+        }
+
+        hasUsedAttack = true;
+        Debug.Log("Attack used! Destroyed " + enemies.Length + " enemies.");
+    }
+
+    void EndLevel(CanvasGroup imageCanvasGroup, bool doRestart, AudioSource audioSource)
+    {
+        m_Timer += Time.deltaTime;
+        if (!hasAudioPlayed)
+        {
+            audioSource.Play();
+            hasAudioPlayed = true;
+        }
+
+        imageCanvasGroup.alpha = m_Timer / 1f;
+
+        if (m_Timer > 1f + 1f)
+        {
+            if (doRestart)
+            {
+                SceneManager.LoadScene(0);
+            }
+            else
+            {
+                Application.Quit();
+            }
+        }
+    }
+
+    void OnTriggerEnter(Collider other)
+    {
+        if (other.transform == player)
+        {
+            isPlayerAtExit = true;
+        }
+    }
+
+    public void CaughtPlayer()
+    {
+        isPlayerCaught = true;
+    }
+
+    void OnDrawGizmosSelected()
+    {
+        Gizmos.color = Color.red;
+        Gizmos.DrawWireSphere(transform.position, attackRange);
+    }
+}
